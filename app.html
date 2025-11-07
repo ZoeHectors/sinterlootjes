@@ -82,10 +82,10 @@
 
   /* Firebase */
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
   import {
     getFirestore, doc, setDoc, getDoc, collection, addDoc, query, orderBy,
-    getDocs, onSnapshot, serverTimestamp, deleteDoc
+    getDocs, onSnapshot, serverTimestamp, deleteDoc, updateDoc, arrayUnion
   } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -104,12 +104,7 @@
 
   /* Helpers */
   const $enc = new TextEncoder();
-  async function hashPass(pw, salt){
-    const key  = await crypto.subtle.importKey('raw', $enc.encode(pw), {name:'PBKDF2'}, false, ['deriveBits']);
-    const bits = await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', salt:$enc.encode(salt), iterations:120000}, key, 256);
-    return [...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('');
-  }
-  const toast = m => alert(m);
+  const toast = (m) => alert(m);
   function xmur3(str){ let h=1779033703 ^ str.length; for(let i=0;i<str.length;i++){ h=Math.imul(h ^ str.charCodeAt(i),3432918353); h=(h<<13)|(h>>>19);} return function(){ h=Math.imul(h ^ (h>>>16),2246822507); h=Math.imul(h ^ (h>>>13),3266489909); return (h^=h>>>16)>>>0;};}
   function sfc32(a,b,c,d){ return function(){ a>>>==0;b>>>==0;c>>>==0;d>>>==0; let t=(a+b)|0; a=b^(b>>>9); b=(c+(c<<3))|0; c=(c<<21)|(c>>>11); c=(c+t)|0; d=(d+1)|0; t=(t+d)|0; return (t>>>0)/4294967296;};}
   function rng(seed){ const g=xmur3(seed); return sfc32(g(),g(),g(),g()); }
@@ -137,25 +132,35 @@
   fixedInfoTop.textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
   fixedInfoBottom.textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
 
-  // Haal gekozen naam uit localStorage (van index.html)
   let currentName = localStorage.getItem('sinty_currentName') || null;
 
-  // Auth guard: zonder sessie terug naar login
-  onAuthStateChanged(auth, (u)=>{
-    if(!u){
+  // ✅ Zorg dat we altijd een sessie hebben
+  async function ensureAnon(){
+    if (auth.currentUser) return auth.currentUser;
+    const cred = await signInAnonymously(auth);
+    return cred.user;
+  }
+
+  // ✅ Zorg dat deze UID schrijfrechten op dit account heeft (voeg toe aan allowed_uids)
+  async function ensureWriteAccess(uid, name){
+    const pRef = doc(db,'events',EVENT_ID,'participants',name);
+    const snap = await getDoc(pRef);
+    if (!snap.exists()) {
+      // geen participant doc? terug naar login
+      localStorage.removeItem('sinty_currentName');
       window.location.href = 'index.html';
-      return;
+      return false;
     }
-    loginStatus.textContent = `Ingelogd — uid ${u.uid.slice(0,6)}…${currentName ? ' — '+currentName : ''}`;
-  });
+    const data = snap.data();
+    const list = Array.isArray(data.allowed_uids) ? data.allowed_uids : [];
+    if (!list.includes(uid)) {
+      // probeer jezelf toe te voegen (rules staan dit toe)
+      await updateDoc(pRef, { allowed_uids: arrayUnion(uid) });
+    }
+    return true;
+  }
 
-  logoutBtn.addEventListener('click', async ()=>{
-    await signOut(auth);
-    localStorage.removeItem('sinty_currentName');
-    window.location.href = 'index.html';
-  });
-
-  /* “Iedereen 1× ingelogd” check */
+  // ✅ “Iedereen 1× ingelogd” check (alleen voor lootje, NIET voor lijstjes)
   async function computeAllLoggedOnce(){
     const qs=await getDocs(collection(db,'events',EVENT_ID,'participants'));
     const map=new Map(); PARTICIPANTS.forEach(n=>map.set(n,false));
@@ -168,15 +173,45 @@
     if(all){ allStatus.classList.add('hidden'); revealBtn.disabled = !currentName; }
     else{ allStatus.textContent = `Wachten op familie: ${done}/${total} heeft 1× ingelogd`; allStatus.classList.remove('hidden'); revealBtn.disabled = true; }
   }
+
   onSnapshot(collection(db,'events',EVENT_ID,'participants'), updateAllBadge);
   updateAllBadge();
 
-  /* Lootje tonen */
+  // 🔐 Auth guard + toegang regelen
+  onAuthStateChanged(auth, async (u)=>{
+    if(!u){
+      // geen sessie → naar login
+      window.location.href = 'index.html';
+      return;
+    }
+    loginStatus.textContent = `Ingelogd — uid ${u.uid.slice(0,6)}…${currentName ? ' — '+currentName : ''}`;
+
+    // Als naam ontbreekt (bv. direct URL), terug naar login
+    if(!currentName){ window.location.href = 'index.html'; return; }
+
+    try {
+      await ensureWriteAccess(u.uid, currentName);
+    } catch (e) {
+      console.error('ensureWriteAccess', e);
+      alert('Kon schrijfrechten niet regelen voor je verlanglijst. Probeer even opnieuw in te loggen.');
+    }
+  });
+
+  // Uitloggen
+  logoutBtn.addEventListener('click', async ()=>{
+    try {
+      await signOut(auth);
+    } finally {
+      localStorage.removeItem('sinty_currentName');
+      window.location.href = 'index.html';
+    }
+  });
+
+  // Lootje tonen
   document.getElementById('reveal').addEventListener('click', async ()=>{
     if(!currentName) return toast('Je naam ontbreekt — log opnieuw in a.u.b.');
     const {all}=await computeAllLoggedOnce();
     if(!all) return toast('Nog niet iedereen heeft 1× ingelogd.');
-
     const names = PARTICIPANTS.slice().sort((a,b)=>a.localeCompare(b,'nl',{sensitivity:'base'}));
     const seed  = JSON.stringify({ TREKCODE, names });
     const asg   = assignDeterministic(names, 'sinterlootjes:'+seed);
@@ -185,7 +220,7 @@
     myMatchEl.classList.remove('hidden');
   });
 
-  /* Verlanglijstjes */
+  // Verlanglijst: UI helpers
   function itemRow(owner,id,data,purchased){
     const div=document.createElement('div'); div.className='item';
     const left=document.createElement('div'); left.className='col';
@@ -193,7 +228,6 @@
     else { const t=document.createElement('div'); t.textContent=data.title||'(zonder titel)'; left.appendChild(t); }
     if(data.note){ const s=document.createElement('div'); s.className='muted'; s.textContent=data.note; left.appendChild(s); }
     const right=document.createElement('div'); right.style.display='flex'; right.style.gap='8px';
-
     if(owner===currentName){
       const del=document.createElement('button'); del.className='btn-alt'; del.textContent='Verwijderen';
       del.onclick=async()=>{ await deleteDoc(doc(db,'events',EVENT_ID,'wishlists',owner,'items',id)); };
@@ -211,8 +245,9 @@
     return div;
   }
 
+  // Toevoegen-knop met duidelijke fouten
   document.getElementById('addItem').addEventListener('click', async ()=>{
-    try{
+    try {
       if(!currentName) return toast('Je naam ontbreekt — log opnieuw in a.u.b.');
       const title=document.getElementById('itemTitle').value.trim();
       const url=document.getElementById('itemUrl').value.trim();
@@ -226,12 +261,13 @@
       document.getElementById('itemTitle').value='';
       document.getElementById('itemUrl').value='';
       document.getElementById('itemNote').value='';
-    }catch(e){
-      console.error(e);
-      toast('Kon item niet toevoegen: ' + (e.message || e));
+    } catch (e) {
+      console.error('addItem error', e);
+      alert('Kon item niet toevoegen: ' + (e.message || e));
     }
   });
 
+  // Mijn lijst live
   function startMyListListener(){
     if(!currentName) { myItemsEl.innerHTML=''; return; }
     const qItems=query(collection(db,'events',EVENT_ID,'wishlists',currentName,'items'), orderBy('createdAt','asc'));
@@ -242,6 +278,7 @@
     });
   }
 
+  // Alle lijsten
   async function refreshAllLists(){
     allListsEl.innerHTML='';
     const owners = PARTICIPANTS.slice().sort((a,b)=>a.localeCompare(b,'nl',{sensitivity:'base'}));
