@@ -69,9 +69,7 @@
     var names = ['Dieta','Robert','Saskia S','Saskia H','Mark','Joshua','Jerome','Denise','Zoë'];
     sel.innerHTML = '';
     var ph = document.createElement('option');
-    ph.value = '';
-    ph.textContent = '— Kies je naam —';
-    ph.disabled = true; ph.selected = true;
+    ph.value = ''; ph.textContent = '— Kies je naam —'; ph.disabled = true; ph.selected = true;
     sel.appendChild(ph);
     names.slice().sort(function(a,b){ return a.localeCompare(b,'nl',{sensitivity:'base'}) })
       .forEach(function(n){
@@ -161,7 +159,6 @@
       const data=snap.data(); const hash=await hashPass(pw, data.pass_salt);
       if(hash !== data.pass_hash) return toast('Onjuist wachtwoord.');
       await setDoc(pRef, { hasLoggedIn:true, lastLoginAt: serverTimestamp() }, { merge:true });
-      // voeg dit device toe aan allowed_uids
       await updateDoc(pRef, { allowed_uids: arrayUnion(auth.currentUser.uid) });
     }
 
