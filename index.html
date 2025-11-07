@@ -69,13 +69,10 @@
     var names = ['Dieta','Robert','Saskia S','Saskia H','Mark','Joshua','Jerome','Denise','Zoë'];
     sel.innerHTML = '';
     var ph = document.createElement('option');
-    ph.value = ''; ph.textContent = '— Kies je naam —'; ph.disabled = true; ph.selected = true;
-    sel.appendChild(ph);
+    ph.value = ''; ph.textContent = '— Kies je naam —';
+    ph.disabled = true; ph.selected = true; sel.appendChild(ph);
     names.slice().sort(function(a,b){ return a.localeCompare(b,'nl',{sensitivity:'base'}) })
-      .forEach(function(n){
-        var opt = document.createElement('option');
-        opt.value = n; opt.textContent = n; sel.appendChild(opt);
-      });
+      .forEach(function(n){ var o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
   });
 </script>
 
@@ -108,13 +105,13 @@
 
   /* Helpers */
   const $enc = new TextEncoder();
+  const toast = m => alert(m);
   async function hashPass(pw, salt){
     const key  = await crypto.subtle.importKey('raw', $enc.encode(pw), {name:'PBKDF2'}, false, ['deriveBits']);
     const bits = await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', salt:$enc.encode(salt), iterations:120000}, key, 256);
     return [...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('');
   }
   const randSalt = () => Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
-  const toast = m => alert(m);
 
   /* UI refs */
   const nameSelect = document.getElementById('nameSelect');
@@ -134,37 +131,42 @@
   }
 
   async function registerOrLogin(){
-    const name = nameSelect.value;
-    const pw   = passEl.value.trim();
-    if(!name) return toast('Kies je naam.');
-    if(!pw)   return toast('Voer je wachtwoord in.');
-    if(!PARTICIPANTS.includes(name)) return toast('Onbekende naam.');
+    try {
+      const name = nameSelect.value;
+      const pw   = passEl.value.trim();
+      if(!name) return toast('Kies je naam.');
+      if(!pw)   return toast('Voer je wachtwoord in.');
+      if(!PARTICIPANTS.includes(name)) return toast('Onbekende naam.');
 
-    await ensureAnon();
-    const pRef = doc(db,'events',EVENT_ID,'participants',name);
-    const snap = await getDoc(pRef);
+      await ensureAnon();
+      const pRef = doc(db,'events',EVENT_ID,'participants',name);
+      const snap = await getDoc(pRef);
 
-    if(modeEl.value === 'register'){
-      if(snap.exists()) return toast('Naam bestaat al. Kies Inloggen.');
-      const salt=randSalt(); const hash=await hashPass(pw, salt);
-      await setDoc(pRef, {
-        name, pass_salt:salt, pass_hash:hash,
-        owner_uid: auth.currentUser.uid,
-        createdAt: serverTimestamp(),
-        hasLoggedIn: true, lastLoginAt: serverTimestamp(),
-        allowed_uids: [auth.currentUser.uid]
-      });
-    }else{
-      if(!snap.exists()) return toast('Naam nog niet geregistreerd. Kies Nieuw aanmaken.');
-      const data=snap.data(); const hash=await hashPass(pw, data.pass_salt);
-      if(hash !== data.pass_hash) return toast('Onjuist wachtwoord.');
-      await setDoc(pRef, { hasLoggedIn:true, lastLoginAt: serverTimestamp() }, { merge:true });
-      // voeg huidig apparaat toe voor schrijfrechten op wishlist
-      await updateDoc(pRef, { allowed_uids: arrayUnion(auth.currentUser.uid) });
+      if(modeEl.value === 'register'){
+        if(snap.exists()) return toast('Naam bestaat al. Kies Inloggen.');
+        const salt=randSalt(); const hash=await hashPass(pw, salt);
+        await setDoc(pRef, {
+          name, pass_salt:salt, pass_hash:hash,
+          owner_uid: auth.currentUser.uid,
+          createdAt: serverTimestamp(),
+          hasLoggedIn: true, lastLoginAt: serverTimestamp(),
+          allowed_uids: [auth.currentUser.uid]
+        });
+      }else{
+        if(!snap.exists()) return toast('Naam nog niet geregistreerd. Kies Nieuw aanmaken.');
+        const data=snap.data(); const hash=await hashPass(pw, data.pass_salt);
+        if(hash !== data.pass_hash) return toast('Onjuist wachtwoord.');
+        await setDoc(pRef, { hasLoggedIn:true, lastLoginAt: serverTimestamp() }, { merge:true });
+        // voeg dit apparaat toe aan allowed_uids
+        await updateDoc(pRef, { allowed_uids: arrayUnion(auth.currentUser.uid) });
+      }
+
+      localStorage.setItem('sinty_currentName', name);
+      window.location.href = 'app.html';
+    } catch(e){
+      console.error(e);
+      toast('Er ging iets mis bij inloggen/registreren: ' + (e.message || e));
     }
-
-    localStorage.setItem('sinty_currentName', name);
-    window.location.href = 'app.html';
   }
 
   goBtn.addEventListener('click', registerOrLogin);
