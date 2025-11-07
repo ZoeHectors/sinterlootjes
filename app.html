@@ -33,7 +33,7 @@
 <body>
 <div class="wrap">
   <div class="card">
-    <h1>Sinterlootjes</h1>
+    <h1>🎅 Sinterlootjes</h1>
     <p class="lead">Je bent ingelogd. Bekijk jouw lootje (na 1× inloggen door iedereen) en vul verlanglijstjes in.</p>
     <div class="controls">
       <span class="pill" id="loginStatus">Controleren…</span>
@@ -82,7 +82,7 @@
 
   /* Firebase */
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
   import {
     getFirestore, doc, setDoc, getDoc, collection, addDoc, query, orderBy,
     getDocs, onSnapshot, serverTimestamp, deleteDoc
@@ -137,10 +137,10 @@
   fixedInfoTop.textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
   fixedInfoBottom.textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
 
-  // Haal gekozen naam uit localStorage
+  // Haal gekozen naam uit localStorage (van index.html)
   let currentName = localStorage.getItem('sinty_currentName') || null;
 
-  // Auth guard
+  // Auth guard: zonder sessie terug naar login
   onAuthStateChanged(auth, (u)=>{
     if(!u){
       window.location.href = 'index.html';
@@ -155,7 +155,7 @@
     window.location.href = 'index.html';
   });
 
-  /* Iedereen 1× ingelogd */
+  /* “Iedereen 1× ingelogd” check */
   async function computeAllLoggedOnce(){
     const qs=await getDocs(collection(db,'events',EVENT_ID,'participants'));
     const map=new Map(); PARTICIPANTS.forEach(n=>map.set(n,false));
@@ -226,7 +226,7 @@
       document.getElementById('itemTitle').value='';
       document.getElementById('itemUrl').value='';
       document.getElementById('itemNote').value='';
-    }catch(e){
+    } catch (e) {
       console.error(e);
       toast('Kon item niet toevoegen: ' + (e.message || e));
     }
