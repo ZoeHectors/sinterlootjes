@@ -61,7 +61,7 @@
   <div class="footnote">Tip: Bewaar je wachtwoord; je hebt het later weer nodig.</div>
 </div>
 
-<!-- Dropdown vuller (zonder Firebase) -->
+<!-- Dropdown vuller -->
 <script>
   window.addEventListener('DOMContentLoaded', function () {
     var sel = document.getElementById('nameSelect');
@@ -72,10 +72,7 @@
     ph.value = ''; ph.textContent = '— Kies je naam —'; ph.disabled = true; ph.selected = true;
     sel.appendChild(ph);
     names.slice().sort(function(a,b){ return a.localeCompare(b,'nl',{sensitivity:'base'}) })
-      .forEach(function(n){
-        var opt = document.createElement('option');
-        opt.value = n; opt.textContent = n; sel.appendChild(opt);
-      });
+      .forEach(function(n){ var o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
   });
 </script>
 
@@ -134,36 +131,43 @@
   }
 
   async function registerOrLogin(){
-    const name = nameSelect.value;
-    const pw   = passEl.value.trim();
-    if(!name) return toast('Kies je naam.');
-    if(!pw)   return toast('Voer je wachtwoord in.');
-    if(!PARTICIPANTS.includes(name)) return toast('Onbekende naam.');
+    try{
+      const name = nameSelect.value;
+      const pw   = passEl.value.trim();
+      if(!name) return toast('Kies je naam.');
+      if(!pw)   return toast('Voer je wachtwoord in.');
+      if(!PARTICIPANTS.includes(name)) return toast('Onbekende naam.');
 
-    await ensureAnon();
-    const pRef = doc(db,'events',EVENT_ID,'participants',name);
-    const snap = await getDoc(pRef);
+      await ensureAnon();
+      const pRef = doc(db,'events',EVENT_ID,'participants',name);
+      const snap = await getDoc(pRef);
 
-    if(modeEl.value === 'register'){
-      if(snap.exists()) return toast('Naam bestaat al. Kies Inloggen.');
-      const salt=randSalt(); const hash=await hashPass(pw, salt);
-      await setDoc(pRef, {
-        name, pass_salt:salt, pass_hash:hash,
-        owner_uid: auth.currentUser.uid,
-        createdAt: serverTimestamp(),
-        hasLoggedIn: true, lastLoginAt: serverTimestamp(),
-        allowed_uids: [auth.currentUser.uid]
-      });
-    }else{
-      if(!snap.exists()) return toast('Naam nog niet geregistreerd. Kies Nieuw aanmaken.');
-      const data=snap.data(); const hash=await hashPass(pw, data.pass_salt);
-      if(hash !== data.pass_hash) return toast('Onjuist wachtwoord.');
-      await setDoc(pRef, { hasLoggedIn:true, lastLoginAt: serverTimestamp() }, { merge:true });
-      await updateDoc(pRef, { allowed_uids: arrayUnion(auth.currentUser.uid) });
+      if(modeEl.value === 'register'){
+        if(snap.exists()) return toast('Naam bestaat al. Kies Inloggen.');
+        const salt=randSalt(); const hash=await hashPass(pw, salt);
+        await setDoc(pRef, {
+          name, pass_salt:salt, pass_hash:hash,
+          owner_uid: auth.currentUser.uid,
+          createdAt: serverTimestamp(),
+          hasLoggedIn: true, lastLoginAt: serverTimestamp(),
+          allowed_uids: [auth.currentUser.uid]
+        });
+      }else{
+        if(!snap.exists()) return toast('Naam nog niet geregistreerd. Kies Nieuw aanmaken.');
+        const data=snap.data(); const hash=await hashPass(pw, data.pass_salt);
+        if(hash !== data.pass_hash) return toast('Onjuist wachtwoord.');
+        await setDoc(pRef, { hasLoggedIn:true, lastLoginAt: serverTimestamp() }, { merge:true });
+        // voeg deze UID toe aan allowed_uids (zodat je op dit apparaat mag schrijven)
+        await updateDoc(pRef, { allowed_uids: arrayUnion(auth.currentUser.uid) });
+      }
+
+      // Bewaar gekozen naam lokaal voor app.html
+      localStorage.setItem('sinty_currentName', name);
+      window.location.href = 'app.html';
+    }catch(e){
+      console.error(e);
+      alert('Inloggen/registreren mislukte: ' + (e.message || e));
     }
-
-    localStorage.setItem('sinty_currentName', name);
-    window.location.href = 'app.html';
   }
 
   goBtn.addEventListener('click', registerOrLogin);
