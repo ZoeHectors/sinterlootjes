@@ -116,6 +116,35 @@
   </div>
 </div>
 
+<!-- Dropdown vuller die altijd werkt -->
+<script>
+  window.addEventListener('DOMContentLoaded', function () {
+    var sel = document.getElementById('nameSelect');
+    if (!sel) return;
+
+    var names = ['Dieta','Robert','Saskia S','Saskia H','Mark','Joshua','Jerome','Denise','Zoë'];
+    sel.innerHTML = '';
+
+    // placeholder-optie
+    var ph = document.createElement('option');
+    ph.value = '';
+    ph.textContent = '— Kies je naam —';
+    ph.disabled = true;
+    ph.selected = true;
+    sel.appendChild(ph);
+
+    names
+      .slice()
+      .sort(function(a,b){ return a.localeCompare(b,'nl',{sensitivity:'base'}) })
+      .forEach(function(n){
+        var opt = document.createElement('option');
+        opt.value = n;
+        opt.textContent = n;
+        sel.appendChild(opt);
+      });
+  });
+</script>
+
 <!-- App -->
 <script type="module">
   /* ======= VASTE INSTELLINGEN ======= */
@@ -125,18 +154,9 @@
     'Dieta','Robert','Saskia S','Saskia H','Mark','Joshua','Jerome','Denise','Zoë'
   ];
 
-  /* === Dropdown meteen vullen (werkt ook zonder Firebase) === */
-  (function initDropdown(){
-    const sel = document.getElementById('nameSelect');
-    if(!sel) return;
-    sel.innerHTML='';
-    PARTICIPANTS
-      .slice()
-      .sort((a,b)=>a.localeCompare(b,'nl',{sensitivity:'base'}))
-      .forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
-    document.getElementById('fixedInfo').textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
-    document.getElementById('fixedInfoBottom').textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
-  })();
+  // Toon vaste info (onder en boven)
+  document.getElementById('fixedInfo').textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
+  document.getElementById('fixedInfoBottom').textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
 
   /* ======= Firebase ======= */
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
@@ -146,7 +166,7 @@
     getDocs, onSnapshot, serverTimestamp, deleteDoc
   } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-  // JOUW (goedgekeurde) CONFIG
+  // JOUW CONFIG
   const firebaseConfig = {
     apiKey: "AIzaSyDM4bGzvdMlNyr7GCTbHLEo96UJFTCYN4Y",
     authDomain: "sinterklaas-c9f01.firebaseapp.com",
