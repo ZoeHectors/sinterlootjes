@@ -8,7 +8,7 @@
 <style>
   * { box-sizing: border-box; margin:0; padding:0; }
   :root{--bg:#fff7ee;--card:#fff;--text:#1f2937;--muted:#64748b;--brand:#ef4444;--border:#e5e7eb}
-  body{margin:0;font-family:ui-rounded,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Emoji",sans-serif;background:var(--bg);color:var(--text)}
+  body{font-family:ui-rounded,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Emoji",sans-serif;background:var(--bg);color:var(--text)}
   .wrap{max-width:1000px;margin:24px auto;padding:16px}
   .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(15,23,42,.06);margin-bottom:14px}
   h1{margin:0 0 8px;font-size:24px} .lead{color:var(--muted);margin:0 0 8px}
@@ -82,7 +82,7 @@
 
   /* Firebase */
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
   import {
     getFirestore, doc, setDoc, getDoc, collection, addDoc, query, orderBy,
     getDocs, onSnapshot, serverTimestamp, deleteDoc
@@ -103,12 +103,6 @@
   const db   = getFirestore(app);
 
   /* Helpers */
-  const $enc = new TextEncoder();
-  async function hashPass(pw, salt){
-    const key  = await crypto.subtle.importKey('raw', $enc.encode(pw), {name:'PBKDF2'}, false, ['deriveBits']);
-    const bits = await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', salt:$enc.encode(salt), iterations:120000}, key, 256);
-    return [...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('');
-  }
   const toast = m => alert(m);
   function xmur3(str){ let h=1779033703 ^ str.length; for(let i=0;i<str.length;i++){ h=Math.imul(h ^ str.charCodeAt(i),3432918353); h=(h<<13)|(h>>>19);} return function(){ h=Math.imul(h ^ (h>>>16),2246822507); h=Math.imul(h ^ (h>>>13),3266489909); return (h^=h>>>16)>>>0;};}
   function sfc32(a,b,c,d){ return function(){ a>>>==0;b>>>==0;c>>>==0;d>>>==0; let t=(a+b)|0; a=b^(b>>>9); b=(c+(c<<3))|0; c=(c<<21)|(c>>>11); c=(c+t)|0; d=(d+1)|0; t=(t+d)|0; return (t>>>0)/4294967296;};}
@@ -137,10 +131,10 @@
   fixedInfoTop.textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
   fixedInfoBottom.textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
 
-  // Haal gekozen naam uit localStorage (van index.html)
+  // naam uit login
   let currentName = localStorage.getItem('sinty_currentName') || null;
 
-  // Auth guard: zonder sessie terug naar login
+  // Auth guard
   onAuthStateChanged(auth, (u)=>{
     if(!u){
       window.location.href = 'index.html';
@@ -150,12 +144,17 @@
   });
 
   logoutBtn.addEventListener('click', async ()=>{
-    await signOut(auth);
-    localStorage.removeItem('sinty_currentName');
-    window.location.href = 'index.html';
+    try{
+      await signOut(auth);
+      localStorage.removeItem('sinty_currentName');
+      window.location.href = 'index.html';
+    }catch(e){
+      console.error(e);
+      alert('Uitloggen mislukte: ' + (e.message || e));
+    }
   });
 
-  /* “Iedereen 1× ingelogd” check */
+  /* Iedereen 1× ingelogd */
   async function computeAllLoggedOnce(){
     const qs=await getDocs(collection(db,'events',EVENT_ID,'participants'));
     const map=new Map(); PARTICIPANTS.forEach(n=>map.set(n,false));
@@ -226,9 +225,9 @@
       document.getElementById('itemTitle').value='';
       document.getElementById('itemUrl').value='';
       document.getElementById('itemNote').value='';
-    } catch (e) {
+    }catch(e){
       console.error(e);
-      toast('Kon item niet toevoegen: ' + (e.message || e));
+      alert('Kon item niet toevoegen: ' + (e.message || e));
     }
   });
 
@@ -258,7 +257,7 @@
       try{
         const pSnap=await getDocs(collection(db,'events',EVENT_ID,'wishlists',owner,'purchases'));
         pSnap.forEach(d=>purchasedIds.add(d.id));
-      }catch(e){ purchasedIds=new Set(); } // eigenaar heeft geen leesrechten
+      }catch(e){ purchasedIds=new Set(); } // eigenaar: geen leesrechten
 
       iSnap.forEach(d=>{
         const isPurchased=purchasedIds.has(d.id);
