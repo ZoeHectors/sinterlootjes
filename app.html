@@ -34,7 +34,7 @@
 <div class="wrap">
   <div class="card">
     <h1>🎅 Sinterlootjes</h1>
-    <p class="lead">Je bent ingelogd. Bekijk je lootje (na 1× inloggen door iedereen) en vul verlanglijstjes in.</p>
+    <p class="lead">Je bent ingelogd. Bekijk jouw lootje (na 1× inloggen door iedereen) en vul verlanglijstjes in.</p>
     <div class="controls">
       <span class="pill" id="loginStatus">Controleren…</span>
       <button class="btn-alt" id="logout">Uitloggen</button>
@@ -44,7 +44,7 @@
 
   <div class="card">
     <h2>Mijn lootje</h2>
-    <p class="muted">Pas zichtbaar als <strong>iedereen</strong> minstens 1× inlogde.</p>
+    <p class="muted">De trekking is vast op basis van de deelnemers en trekcode. Pas zichtbaar als <strong>iedereen</strong> minstens 1× inlogde.</p>
     <div class="controls">
       <button class="btn-alt" id="reveal" disabled>Toon mijn lootje</button>
       <span id="myMatch" class="inline-result hidden"></span>
@@ -104,6 +104,11 @@
 
   /* Helpers */
   const $enc = new TextEncoder();
+  async function hashPass(pw, salt){
+    const key  = await crypto.subtle.importKey('raw', $enc.encode(pw), {name:'PBKDF2'}, false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', salt:$enc.encode(salt), iterations:120000}, key, 256);
+    return [...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
   const toast = m => alert(m);
   function xmur3(str){ let h=1779033703 ^ str.length; for(let i=0;i<str.length;i++){ h=Math.imul(h ^ str.charCodeAt(i),3432918353); h=(h<<13)|(h>>>19);} return function(){ h=Math.imul(h ^ (h>>>16),2246822507); h=Math.imul(h ^ (h>>>13),3266489909); return (h^=h>>>16)>>>0;};}
   function sfc32(a,b,c,d){ return function(){ a>>>==0;b>>>==0;c>>>==0;d>>>==0; let t=(a+b)|0; a=b^(b>>>9); b=(c+(c<<3))|0; c=(c<<21)|(c>>>11); c=(c+t)|0; d=(d+1)|0; t=(t+d)|0; return (t>>>0)/4294967296;};}
@@ -132,9 +137,10 @@
   fixedInfoTop.textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
   fixedInfoBottom.textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
 
+  // Haal gekozen naam uit localStorage (van index.html)
   let currentName = localStorage.getItem('sinty_currentName') || null;
 
-  // Auth guard
+  // Auth guard: zonder sessie terug naar login
   onAuthStateChanged(auth, (u)=>{
     if(!u){
       window.location.href = 'index.html';
@@ -144,15 +150,12 @@
   });
 
   logoutBtn.addEventListener('click', async ()=>{
-    try{
-      await signOut(auth);
-    }finally{
-      localStorage.removeItem('sinty_currentName');
-      window.location.href = 'index.html';
-    }
+    await signOut(auth);
+    localStorage.removeItem('sinty_currentName');
+    window.location.href = 'index.html';
   });
 
-  /* Iedereen 1× ingelogd */
+  /* “Iedereen 1× ingelogd” check */
   async function computeAllLoggedOnce(){
     const qs=await getDocs(collection(db,'events',EVENT_ID,'participants'));
     const map=new Map(); PARTICIPANTS.forEach(n=>map.set(n,false));
@@ -209,7 +212,7 @@
   }
 
   document.getElementById('addItem').addEventListener('click', async ()=>{
-    try {
+    try{
       if(!currentName) return toast('Je naam ontbreekt — log opnieuw in a.u.b.');
       const title=document.getElementById('itemTitle').value.trim();
       const url=document.getElementById('itemUrl').value.trim();
@@ -223,7 +226,7 @@
       document.getElementById('itemTitle').value='';
       document.getElementById('itemUrl').value='';
       document.getElementById('itemNote').value='';
-    } catch (e) {
+    }catch(e){
       console.error(e);
       toast('Kon item niet toevoegen: ' + (e.message || e));
     }
