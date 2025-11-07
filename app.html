@@ -6,8 +6,8 @@
 <title>Sinterlootjes — App</title>
 <meta name="color-scheme" content="light">
 <style>
+  * { box-sizing: border-box; margin:0; padding:0; }
   :root{--bg:#fff7ee;--card:#fff;--text:#1f2937;--muted:#64748b;--brand:#ef4444;--border:#e5e7eb}
-  *{box-sizing:border-box}
   body{margin:0;font-family:ui-rounded,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Emoji",sans-serif;background:var(--bg);color:var(--text)}
   .wrap{max-width:1000px;margin:24px auto;padding:16px}
   .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(15,23,42,.06);margin-bottom:14px}
@@ -33,7 +33,7 @@
 <body>
 <div class="wrap">
   <div class="card">
-    <h1>Sinterlootjes</h1>
+    <h1>🎅 Sinterlootjes</h1>
     <p class="lead">Je bent ingelogd. Bekijk jouw lootje (na 1× inloggen door iedereen) en vul verlanglijstjes in.</p>
     <div class="controls">
       <span class="pill" id="loginStatus">Controleren…</span>
@@ -82,7 +82,7 @@
 
   /* Firebase */
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
   import {
     getFirestore, doc, setDoc, getDoc, collection, addDoc, query, orderBy,
     getDocs, onSnapshot, serverTimestamp, deleteDoc
@@ -137,10 +137,10 @@
   fixedInfoTop.textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
   fixedInfoBottom.textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
 
-  // Haal gekozen naam uit localStorage (van index.html)
+  // Haal gekozen naam uit localStorage
   let currentName = localStorage.getItem('sinty_currentName') || null;
 
-  // Auth guard: zonder sessie terug naar login
+  // Auth guard
   onAuthStateChanged(auth, (u)=>{
     if(!u){
       window.location.href = 'index.html';
@@ -155,7 +155,7 @@
     window.location.href = 'index.html';
   });
 
-  /* “Iedereen 1× ingelogd” check */
+  /* Iedereen 1× ingelogd */
   async function computeAllLoggedOnce(){
     const qs=await getDocs(collection(db,'events',EVENT_ID,'participants'));
     const map=new Map(); PARTICIPANTS.forEach(n=>map.set(n,false));
@@ -212,15 +212,24 @@
   }
 
   document.getElementById('addItem').addEventListener('click', async ()=>{
-    if(!currentName) return toast('Je naam ontbreekt — log opnieuw in a.u.b.');
-    const title=document.getElementById('itemTitle').value.trim();
-    const url=document.getElementById('itemUrl').value.trim();
-    const note=document.getElementById('itemNote').value.trim();
-    if(!title) return toast('Geef een titel.');
-    await addDoc(collection(db,'events',EVENT_ID,'wishlists',currentName,'items'), { title, url:url||null, note:note||null, createdAt: serverTimestamp() });
-    document.getElementById('itemTitle').value='';
-    document.getElementById('itemUrl').value='';
-    document.getElementById('itemNote').value='';
+    try{
+      if(!currentName) return toast('Je naam ontbreekt — log opnieuw in a.u.b.');
+      const title=document.getElementById('itemTitle').value.trim();
+      const url=document.getElementById('itemUrl').value.trim();
+      const note=document.getElementById('itemNote').value.trim();
+      if(!title) return toast('Geef een titel.');
+
+      await addDoc(collection(db,'events',EVENT_ID,'wishlists',currentName,'items'), {
+        title, url:url||null, note:note||null, createdAt: serverTimestamp()
+      });
+
+      document.getElementById('itemTitle').value='';
+      document.getElementById('itemUrl').value='';
+      document.getElementById('itemNote').value='';
+    }catch(e){
+      console.error(e);
+      toast('Kon item niet toevoegen: ' + (e.message || e));
+    }
   });
 
   function startMyListListener(){
