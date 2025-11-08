@@ -203,7 +203,19 @@
     toAppBtn.classList.remove('hidden');
   }
 
-  goBtn.addEventListener('click', registerOrLogin);
+  function bindLogin() {
+  const btn = document.getElementById('go');
+  if (!btn) { console.error('⚠️ Go-knop niet gevonden'); return; }
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    registerOrLogin().catch(err => {
+      console.error(err);
+      alert('Kon niet inloggen/registreren: ' + (err?.message || err));
+    });
+  });
+}
+window.addEventListener('DOMContentLoaded', bindLogin);
 </script>
 </body>
 </html>
