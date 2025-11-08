@@ -32,7 +32,7 @@
 <body>
 <div class="wrap">
   <div class="card">
-    <h1>🎅 Sinterlootjes</h1>
+    <h1>Sinterlootjes</h1>
     <p class="lead">Je bent ingelogd. Bekijk jouw lootje (na 1× inloggen door iedereen) en vul verlanglijstjes in.</p>
     <div class="controls">
       <span class="muted" id="loginStatus">Controleren…</span>
@@ -64,23 +64,27 @@
   </div>
 
   <div class="card">
-    <details open>
-      <summary>Alle verlanglijstjes</summary>
-      <div id="allLists" class="col" style="margin-top:8px"></div>
-    </details>
-    <details>
-      <summary>Verlanglijstjes kids (Otis, Levi)</summary>
-      <div id="kidsLists" class="col" style="margin-top:8px"></div>
-    </details>
-  </div>
+  <details open>
+    <summary>Alle verlanglijstjes (volwassenen)</summary>
+    <div id="allLists" class="col" style="margin-top:8px"></div>
+  </details>
+
+  <details>
+    <summary>Verlanglijstjes kids (Otis & Levi)</summary>
+    <div id="kidsLists" class="col" style="margin-top:8px"></div>
+  </details>
 </div>
 
 <script type="module">
   /* Vaste instellingen */
   const EVENT_ID = 'sinty-2025';
   const TREKCODE = 'hausverlorenenbewilderd';
-  const PARTICIPANTS = ['Dieta','Robert','Saskia S','Saskia H','Mark','Joshua','Jerome','Denise','Zoë'];
-  const KIDS = ['Otis','Levi'];
+  const ADULTS = [
+  'Dieta','Robert','Saskia S','Saskia H','Mark','Joshua','Jerome','Denise','Zoë'
+];
+  const KIDS = [
+  'Otis','Levi'
+];
 
   /* Firebase */
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
@@ -237,7 +241,7 @@
     });
   }
 
-  /* Alle verlanglijstjes (opvouwbaar blok) */
+  /* Alle verlanglijstjes */
   async function renderAllLists(){
     allListsEl.innerHTML='';
     const owners = PARTICIPANTS.slice().sort((a,b)=>a.localeCompare(b,'nl',{sensitivity:'base'}));
