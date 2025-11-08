@@ -157,12 +157,15 @@
     try{ await signInAnonymously(auth); }catch{}
   });
 
-  // Uitloggen
-  logoutBtn.addEventListener('click', async ()=>{
-    try{ await signOut(auth); }catch{}
+ // --- UITLOG KNOP ---
+logoutBtn.onclick = async () => {
+  try {
+    await signOut(auth);
+  } finally {
     localStorage.removeItem('sinty_currentName');
     window.location.href = 'index.html';
-  });
+  }
+};
 
   /* Iedereen 1× ingelogd */
   async function allLoggedOnce(){
@@ -181,17 +184,20 @@
   updateAllBadge();
 
   /* Lootje tonen */
-  document.getElementById('reveal').addEventListener('click', async ()=>{
-    if(!currentName) return toast('Je naam ontbreekt — log opnieuw in a.u.b.');
-    const {all}=await allLoggedOnce();
-    if(!all) return toast('Nog niet iedereen heeft 1× ingelogd.');
-    const names = PARTICIPANTS.slice().sort((a,b)=>a.localeCompare(b,'nl',{sensitivity:'base'}));
-    const seed  = JSON.stringify({ TREKCODE, names });
-    const asg   = assignDeterministic(names, 'sinterlootjes:'+seed);
-    const target= asg.get(currentName);
-    myMatchEl.textContent = `Jij koopt voor: ${target} 🎁`;
-    myMatchEl.classList.remove('hidden');
-  });
+// --- LOOTJE KNOP ---
+document.getElementById('reveal').onclick = async () => {
+  if(!currentName){ alert('Log opnieuw in a.u.b.'); return; }
+  const {all} = await computeAllLoggedOnce();
+  if(!all){ alert('Nog niet iedereen heeft 1× ingelogd.'); return; }
+
+  const names = PARTICIPANTS.slice().sort((a,b)=>a.localeCompare(b,'nl',{sensitivity:'base'}));
+  const seed  = JSON.stringify({ TREKCODE, names });
+  const asg   = assignDeterministic(names, 'sinterlootjes:'+seed);
+  const target= asg.get(currentName);
+  const myMatchEl = document.getElementById('myMatch');
+  myMatchEl.textContent = `Jij koopt voor: ${target} 🎁`;
+  myMatchEl.classList.remove('hidden');
+};
 
   /* Verlanglijstjes (eigen) */
   function itemRow(owner,id,data,purchased){
@@ -219,17 +225,27 @@
     return div;
   }
 
-  document.getElementById('addItem').addEventListener('click', async ()=>{
-    if(!currentName) return toast('Je naam ontbreekt — log opnieuw in a.u.b.');
-    const title=document.getElementById('itemTitle').value.trim();
-    const url=document.getElementById('itemUrl').value.trim();
-    const note=document.getElementById('itemNote').value.trim();
-    if(!title) return toast('Geef een titel.');
-    await addDoc(collection(db,'events',EVENT_ID,'wishlists',currentName,'items'), { title, url:url||null, note:note||null, createdAt: serverTimestamp() });
+// --- TOEVOEGEN KNOP ---
+document.getElementById('addItem').onclick = async () => {
+  try {
+    if(!currentName){ alert('Log opnieuw in a.u.b.'); return; }
+    const title = document.getElementById('itemTitle').value.trim();
+    const url   = document.getElementById('itemUrl').value.trim();
+    const note  = document.getElementById('itemNote').value.trim();
+    if(!title){ alert('Geef een titel.'); return; }
+
+    await addDoc(collection(db,'events',EVENT_ID,'wishlists',currentName,'items'), {
+      title, url: url || null, note: note || null, createdAt: serverTimestamp()
+    });
+
     document.getElementById('itemTitle').value='';
     document.getElementById('itemUrl').value='';
     document.getElementById('itemNote').value='';
-  });
+  } catch (e) {
+    console.error(e);
+    alert('Kon item niet toevoegen: ' + (e.message || e));
+  }
+};
 
   function startMyListListener(){
     if(!currentName){ myItemsEl.innerHTML=''; return; }
@@ -242,32 +258,57 @@
   }
 
   /* Alle verlanglijstjes */
-  async function renderAllLists(){
-    allListsEl.innerHTML='';
-    const owners = PARTICIPANTS.slice().sort((a,b)=>a.localeCompare(b,'nl',{sensitivity:'base'}));
-    for(const owner of owners){
-      const wrap=document.createElement('div'); wrap.className='card';
-      const h=document.createElement('h3'); h.textContent=owner; wrap.appendChild(h);
-      const list=document.createElement('div'); list.className='col'; wrap.appendChild(list);
-      allListsEl.appendChild(wrap);
+  async function refreshAllLists(){
+  const root = document.getElementById('allLists');
+  if(!root){ return; }
+  root.innerHTML = ''; // altijd eerst legen
 
-      const qItems=query(collection(db,'events',EVENT_ID,'wishlists',owner,'items'), orderBy('createdAt','asc'));
-      const iSnap=await getDocs(qItems);
+  // 1) deelnemers (volwassenen) — uit PARTICIPANTS
+  const owners = Array.from(new Set(
+    PARTICIPANTS.slice().sort((a,b)=>a.localeCompare(b,'nl',{sensitivity:'base'}))
+  ));
 
-      let purchasedIds=new Set();
-      try{
-        const pSnap=await getDocs(collection(db,'events',EVENT_ID,'wishlists',owner,'purchases'));
-        pSnap.forEach(d=>purchasedIds.add(d.id));
-      }catch{ purchasedIds=new Set(); }
+  // 2) per owner: 1 kaart
+  for(const owner of owners){
+    const wrap = document.createElement('div');
+    wrap.className = 'card';
+    const h = document.createElement('h3');
+    h.textContent = owner;
+    wrap.appendChild(h);
 
-      iSnap.forEach(d=>{
-        const isPurchased=purchasedIds.has(d.id);
-        if(owner !== currentName && isPurchased) return;
-        list.appendChild(itemRow(owner,d.id,d.data(),isPurchased));
+    const list = document.createElement('div');
+    list.className = 'col';
+    wrap.appendChild(list);
+    root.appendChild(wrap);
+
+    // items ophalen
+    const qItems = query(collection(db,'events',EVENT_ID,'wishlists',owner,'items'), orderBy('createdAt','asc'));
+    const iSnap  = await getDocs(qItems);
+
+    // purchases lezen (als toegestaan)
+    let purchasedIds = new Set();
+    try {
+      const pSnap = await getDocs(collection(db,'events',EVENT_ID,'wishlists',owner,'purchases'));
+      pSnap.forEach(d => purchasedIds.add(d.id));
+    } catch (_) { /* eigenaar ziet dit niet; is oké */ }
+
+    // render
+    if(iSnap.empty){
+      const em=document.createElement('div'); em.className='muted'; em.textContent='Geen zichtbare items.';
+      list.appendChild(em);
+    }else{
+      iSnap.forEach(d => {
+        const isPurchased = purchasedIds.has(d.id);
+        if(owner !== currentName && isPurchased) return; // verborgen voor anderen
+        list.appendChild(itemRow(owner, d.id, d.data(), isPurchased));
       });
-      if(!list.childElementCount){ const em=document.createElement('div'); em.className='muted'; em.textContent='Geen zichtbare items.'; list.appendChild(em); }
+      if(!list.childElementCount){
+        const em=document.createElement('div'); em.className='muted'; em.textContent='Geen zichtbare items.';
+        list.appendChild(em);
+      }
     }
   }
+}
 
   /* Kids verlanglijstjes (Otis/Levi) — iedereen mag toevoegen/afstrepen */
   function kidRow(kid,id,data,purchased){
