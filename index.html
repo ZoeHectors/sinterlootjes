@@ -14,20 +14,21 @@
   h1{margin:0 0 8px;font-size:24px} .lead{color:var(--muted);margin:0 0 8px}
   label{font-size:13px;font-weight:650;display:block;margin:10px 0 6px}
   input,select,button{font:inherit}
-  select,input[type="password"]{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:#fff}
+  select,input[type="password"],input[type="text"],input[type="tel"]{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:#fff}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:12px} @media (max-width:720px){.row{grid-template-columns:1fr}}
   .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
   button{border:none;cursor:pointer;padding:10px 12px;border-radius:10px;font-weight:650;box-shadow:0 2px 0 rgba(0,0,0,.07)}
-  .btn{background:var(--brand);color:#fff}
+  .btn{background:var(--brand);color:#fff} .btn-alt{background:#fff;border:1px solid var(--border)}
   .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #fde68a;color:#92400e;border-radius:999px;padding:6px 10px;font-size:12.5px;background:#fff}
   .footnote{margin-top:8px;font-size:12px;color:#9aa3b2}
+  .hidden{display:none}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="card">
     <h1>🎅 Sinterlootjes</h1>
-    <p class="lead">Log in of maak je account aan. Daarna ga je door naar de lootjes & verlanglijstjes.</p>
+    <p class="lead">Log in of maak je code aan. Daarna kun je naar de lootjes & verlanglijstjes (budget €15).</p>
     <span class="pill" id="loginStatus">Niet ingelogd</span>
   </div>
 
@@ -35,12 +36,12 @@
     <h2>Inloggen / Registreren</h2>
     <div class="row">
       <div>
-        <label>Naam (uit lijst)</label>
+        <label>Naam</label>
         <select id="nameSelect"></select>
       </div>
       <div>
-        <label>Wachtwoord</label>
-        <input id="password" type="password" placeholder="Kies of vul je wachtwoord">
+        <label id="codeLabel">5-cijferige code</label>
+        <input id="code" type="tel" inputmode="numeric" pattern="\\d{5}" maxlength="5" placeholder="• • • • •">
       </div>
     </div>
     <div class="row">
@@ -52,42 +53,43 @@
         </select>
       </div>
       <div class="controls" style="align-items:end">
-        <button class="btn" id="go">Verder</button>
+        <button class="btn" id="go">Doorgaan</button>
+        <a class="btn-alt hidden" id="toApp" href="app.html">Ga naar app</a>
       </div>
     </div>
-    <div class="footnote" id="fixedInfo"></div>
+    <div class="footnote" id="hint"></div>
   </div>
-
-  <div class="footnote">Tip: Bewaar je wachtwoord; je hebt het later weer nodig.</div>
 </div>
 
 <!-- Dropdown vuller (zonder Firebase) -->
 <script>
-  window.addEventListener('DOMContentLoaded', function () {
-    var sel = document.getElementById('nameSelect');
-    if (!sel) return;
-    var names = ['Dieta','Robert','Saskia S','Saskia H','Mark','Joshua','Jerome','Denise','Zoë'];
+  (() => {
+    const sel = document.getElementById('nameSelect');
+    const urlParams = new URLSearchParams(location.search);
+    const pre = urlParams.get('name');
+    const names = ['Dieta','Robert','Saskia S','Saskia H','Mark','Joshua','Jerome','Denise','Zoë'];
     sel.innerHTML = '';
-    var ph = document.createElement('option');
-    ph.value = ''; ph.textContent = '— Kies je naam —';
-    ph.disabled = true; ph.selected = true; sel.appendChild(ph);
-    names.slice().sort(function(a,b){ return a.localeCompare(b,'nl',{sensitivity:'base'}) })
-      .forEach(function(n){ var o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
-  });
+    const ph = document.createElement('option');
+    ph.value = ''; ph.textContent = '— Kies je naam —'; ph.disabled = true; ph.selected = true;
+    sel.appendChild(ph);
+    names.slice().sort((a,b)=>a.localeCompare(b,'nl',{sensitivity:'base'})).forEach(n=>{
+      const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o);
+    });
+    if (pre && names.includes(pre)) sel.value = pre;
+  })();
 </script>
 
 <!-- App (Firebase + login) -->
 <script type="module">
   /* Vaste instellingen */
   const EVENT_ID = 'sinty-2025';
-  const TREKCODE = 'hausverlorenenbewilderd';
   const PARTICIPANTS = ['Dieta','Robert','Saskia S','Saskia H','Mark','Joshua','Jerome','Denise','Zoë'];
-  document.getElementById('fixedInfo').textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
+  const BAD_CODES = new Set(['00000','11111','22222','33333','44444','55555','66666','77777','88888','99999','12345','54321','01234','23456','34567','45678','56789']);
 
   /* Firebase */
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-  import { getFirestore, doc, setDoc, getDoc, serverTimestamp, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+  import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDM4bGzvdMlNyr7GCTbHLEo96UJFTCYN4Y",
@@ -103,22 +105,24 @@
   const auth = getAuth(app);
   const db   = getFirestore(app);
 
-  /* Helpers */
+  /* UI refs */
+  const nameSelect = document.getElementById('nameSelect');
+  const codeEl     = document.getElementById('code');
+  const modeEl     = document.getElementById('mode');
+  const goBtn      = document.getElementById('go');
+  const toAppBtn   = document.getElementById('toApp');
+  const loginStatus= document.getElementById('loginStatus');
+  const hintEl     = document.getElementById('hint');
+  const codeLabel  = document.getElementById('codeLabel');
+
+  const toast = (m)=>alert(m);
   const $enc = new TextEncoder();
-  const toast = m => alert(m);
-  async function hashPass(pw, salt){
+  async function hashCode(pw, salt){
     const key  = await crypto.subtle.importKey('raw', $enc.encode(pw), {name:'PBKDF2'}, false, ['deriveBits']);
     const bits = await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', salt:$enc.encode(salt), iterations:120000}, key, 256);
     return [...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('');
   }
   const randSalt = () => Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
-
-  /* UI refs */
-  const nameSelect = document.getElementById('nameSelect');
-  const passEl     = document.getElementById('password');
-  const modeEl     = document.getElementById('mode');
-  const goBtn      = document.getElementById('go');
-  const loginStatus= document.getElementById('loginStatus');
 
   onAuthStateChanged(auth, (u)=> {
     loginStatus.textContent = u ? `Sessie actief — uid ${u.uid.slice(0,6)}…` : 'Niet ingelogd';
@@ -130,43 +134,73 @@
     return cred.user;
   }
 
-  async function registerOrLogin(){
-    try {
-      const name = nameSelect.value;
-      const pw   = passEl.value.trim();
-      if(!name) return toast('Kies je naam.');
-      if(!pw)   return toast('Voer je wachtwoord in.');
-      if(!PARTICIPANTS.includes(name)) return toast('Onbekende naam.');
+  async function checkAccountExists(name){
+    const pRef = doc(db,'events',EVENT_ID,'participants',name);
+    const snap = await getDoc(pRef);
+    return snap.exists();
+  }
 
+  nameSelect.addEventListener('change', async ()=>{
+    const n = nameSelect.value;
+    if(!n) return;
+    if(!PARTICIPANTS.includes(n)) { hintEl.textContent='Onbekende naam.'; return; }
+    hintEl.textContent = 'Even checken…';
+    try{
       await ensureAnon();
-      const pRef = doc(db,'events',EVENT_ID,'participants',name);
-      const snap = await getDoc(pRef);
-
-      if(modeEl.value === 'register'){
-        if(snap.exists()) return toast('Naam bestaat al. Kies Inloggen.');
-        const salt=randSalt(); const hash=await hashPass(pw, salt);
-        await setDoc(pRef, {
-          name, pass_salt:salt, pass_hash:hash,
-          owner_uid: auth.currentUser.uid,
-          createdAt: serverTimestamp(),
-          hasLoggedIn: true, lastLoginAt: serverTimestamp(),
-          allowed_uids: [auth.currentUser.uid]
-        });
+      const exists = await checkAccountExists(n);
+      if(exists){
+        modeEl.value = 'login';
+        codeLabel.textContent = 'Voer je 5-cijferige code in';
+        hintEl.textContent = 'Account gevonden — vul je code in.';
       }else{
-        if(!snap.exists()) return toast('Naam nog niet geregistreerd. Kies Nieuw aanmaken.');
-        const data=snap.data(); const hash=await hashPass(pw, data.pass_salt);
-        if(hash !== data.pass_hash) return toast('Onjuist wachtwoord.');
-        await setDoc(pRef, { hasLoggedIn:true, lastLoginAt: serverTimestamp() }, { merge:true });
-        // voeg dit apparaat toe aan allowed_uids
-        await updateDoc(pRef, { allowed_uids: arrayUnion(auth.currentUser.uid) });
+        modeEl.value = 'register';
+        codeLabel.textContent = 'Kies een 5-cijferige code';
+        hintEl.textContent = 'Nog geen account — kies nu een code (geen 12345/00000 enz.).';
       }
-
-      localStorage.setItem('sinty_currentName', name);
-      window.location.href = 'app.html';
-    } catch(e){
-      console.error(e);
-      toast('Er ging iets mis bij inloggen/registreren: ' + (e.message || e));
+    }catch(e){
+      hintEl.textContent = 'Kon niet controleren. Probeer opnieuw.';
     }
+  });
+
+  function validateCode(c){
+    return /^\d{5}$/.test(c) && !BAD_CODES.has(c);
+  }
+
+  async function registerOrLogin(){
+    const name = nameSelect.value;
+    const code = codeEl.value.trim();
+    if(!name) return toast('Kies je naam.');
+    if(!/^\d{5}$/.test(code)) return toast('Code moet 5 cijfers zijn.');
+    if(modeEl.value==='register' && !validateCode(code)) return toast('Kies een minder voorspelbare code.');
+
+    await ensureAnon();
+    const pRef = doc(db,'events',EVENT_ID,'participants',name);
+    const snap = await getDoc(pRef);
+
+    if(modeEl.value === 'register'){
+      if(snap.exists()) return toast('Naam bestaat al. Kies Inloggen.');
+      const salt=randSalt(); const hash=await hashCode(code, salt);
+      await setDoc(pRef, {
+        name, pass_salt:salt, pass_hash:hash,
+        owner_uid: auth.currentUser.uid,
+        allowed_uids: [auth.currentUser.uid],
+        createdAt: serverTimestamp(),
+        hasLoggedIn: true, lastLoginAt: serverTimestamp()
+      });
+      hintEl.textContent = 'Geregistreerd. Je kunt naar de app.';
+    }else{
+      if(!snap.exists()) return toast('Naam nog niet geregistreerd. Kies Nieuw aanmaken.');
+      const data=snap.data(); const hash=await hashCode(code, data.pass_salt);
+      if(hash !== data.pass_hash) return toast('Onjuiste code.');
+      await setDoc(pRef, { hasLoggedIn:true, lastLoginAt: serverTimestamp() }, { merge:true });
+      // voeg dit apparaat toe aan allowed_uids
+      await updateDoc(pRef, { allowed_uids: arrayUnion(auth.currentUser.uid) });
+      hintEl.textContent = 'Ingelogd. Je kunt naar de app.';
+    }
+
+    // Sla naam op (voor app) en toon knop i.p.v. auto-doorgaan
+    localStorage.setItem('sinty_currentName', name);
+    toAppBtn.classList.remove('hidden');
   }
 
   goBtn.addEventListener('click', registerOrLogin);
