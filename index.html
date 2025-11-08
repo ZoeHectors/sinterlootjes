@@ -14,82 +14,68 @@
   h1{margin:0 0 8px;font-size:24px} .lead{color:var(--muted);margin:0 0 8px}
   label{font-size:13px;font-weight:650;display:block;margin:10px 0 6px}
   input,select,button{font:inherit}
-  select,input[type="password"],input[type="text"],input[type="tel"]{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:#fff}
+  select,input[type="password"],input[type="text"],input[type="number"]{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:#fff}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:12px} @media (max-width:720px){.row{grid-template-columns:1fr}}
   .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
   button{border:none;cursor:pointer;padding:10px 12px;border-radius:10px;font-weight:650;box-shadow:0 2px 0 rgba(0,0,0,.07)}
   .btn{background:var(--brand);color:#fff} .btn-alt{background:#fff;border:1px solid var(--border)}
+  .help{font-size:12px;color:#9aa3b2;margin-top:6px}
   .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #fde68a;color:#92400e;border-radius:999px;padding:6px 10px;font-size:12.5px;background:#fff}
-  .muted{color:var(--muted)} .footnote{margin-top:8px;font-size:12px;color:#9aa3b2}
-  .ok{color:#047857}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="card">
     <h1>🎅 Sinterlootjes</h1>
-    <p class="lead">Log in of maak je account aan met je 5-cijfercode. Daarna ga je door naar de app (lootje & verlanglijstjes).</p>
+    <p class="lead">Log in of maak je code aan. Daarna ga je door naar lootje & verlanglijstjes.</p>
     <span class="pill" id="loginStatus">Niet ingelogd</span>
   </div>
 
   <div class="card">
-    <p class="muted">📍 Begint om <strong>15:00</strong> op <strong>huisnummer 47</strong>. <span class="ok">Hapjes en lekkers worden verzorgd!</span></p>
-  </div>
-
-  <div class="card">
-    <h2>Inloggen / Registreren</h2>
+    <h2>Inloggen / Code kiezen</h2>
     <div class="row">
       <div>
         <label>Naam</label>
         <select id="nameSelect"></select>
       </div>
       <div>
-        <label>5-cijfercode</label>
-        <input id="pin" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="5" placeholder="Bijv. 53827">
+        <label id="codeLabel">5-cijferige code</label>
+        <input id="codeInput" type="text" inputmode="numeric" pattern="\\d{5}" maxlength="5" placeholder="•••••">
+        <div class="help" id="codeHelp">Kies een nieuwe 5-cijferige code.</div>
       </div>
     </div>
-    <div class="row">
-      <div>
-        <label>Actie</label>
-        <select id="mode">
-          <option value="login">Inloggen (bestaat al)</option>
-          <option value="register">Nieuw aanmaken</option>
-        </select>
-      </div>
-      <div class="controls" style="align-items:end">
-        <button class="btn" id="go">Inloggen / Aanmaken</button>
-        <a class="btn-alt" href="app.html" id="toApp" style="text-decoration:none">Ga naar app</a>
-      </div>
+    <div class="controls" style="align-items:end">
+      <button class="btn" id="go">Verder</button>
     </div>
-    <div class="footnote">Tip: Je kunt de loginpagina bookmarken met <code>?name=JouwNaam</code> in de URL, dan staat je naam al gekozen.</div>
+    <div class="help">Tip: je kunt een link bewaren met je naam, bijv. <code>?name=Robert</code></div>
   </div>
 </div>
 
-<!-- Dropdown vuller + query preselect -->
+<!-- Dropdown vullen zonder Firebase -->
 <script>
   (function(){
-    var sel = document.getElementById('nameSelect');
-    var names = ['Dieta','Robert','Saskia S','Saskia H','Mark','Joshua','Jerome','Denise','Zoë'];
+    const sel = document.getElementById('nameSelect');
+    const names = ['Dieta','Robert','Saskia S','Saskia H','Mark','Joshua','Jerome','Denise','Zoë'];
     sel.innerHTML = '';
-    var ph = document.createElement('option');
-    ph.value=''; ph.textContent='— Kies je naam —'; ph.disabled=true; ph.selected=true; sel.appendChild(ph);
-    names.slice().sort((a,b)=>a.localeCompare(b,'nl',{sensitivity:'base'})).forEach(n=>{ var o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
-
-    // bookmarkable name: ?name=Zoë
-    var qs=new URLSearchParams(location.search);
-    var qn=qs.get('name');
-    if(qn){ for (var i=0;i<sel.options.length;i++){ if(sel.options[i].value.toLowerCase()===qn.toLowerCase()){ sel.selectedIndex=i; break; } } }
+    const ph = document.createElement('option'); ph.value=''; ph.textContent='— Kies je naam —'; ph.disabled=true; ph.selected=true; sel.appendChild(ph);
+    names.slice().sort((a,b)=>a.localeCompare(b,'nl',{sensitivity:'base'})).forEach(n=>{
+      const o=document.createElement('option'); o.value=o.textContent=n; sel.appendChild(o);
+    });
+    // bookmarkable: ?name=...
+    const url = new URL(window.location.href);
+    const qn = url.searchParams.get('name');
+    if (qn && names.includes(qn)) { sel.value = qn; sel.dispatchEvent(new Event('change')); }
   })();
 </script>
 
-<!-- App (Firebase + login) -->
+<!-- Firebase + login -->
 <script type="module">
-  /* Vaste instellingen */
+  // ==== VASTE INSTELLINGEN ====
   const EVENT_ID = 'sinty-2025';
   const TREKCODE = 'hausverlorenenbewilderd';
   const PARTICIPANTS = ['Dieta','Robert','Saskia S','Saskia H','Mark','Joshua','Jerome','Denise','Zoë'];
 
-  /* Firebase */
+  // ==== Firebase ====
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
   import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
   import { getFirestore, doc, setDoc, getDoc, serverTimestamp, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
@@ -108,31 +94,49 @@
   const auth = getAuth(app);
   const db   = getFirestore(app);
 
-  /* Helpers */
-  const $enc = new TextEncoder();
-  async function hashPass(pw, salt){
-    const key  = await crypto.subtle.importKey('raw', $enc.encode(pw), {name:'PBKDF2'}, false, ['deriveBits']);
-    const bits = await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', salt:$enc.encode(salt), iterations:120000}, key, 256);
+  // ==== Helpers ====
+  const enc = new TextEncoder();
+  async function hash5(code, salt){
+    const key  = await crypto.subtle.importKey('raw', enc.encode(code), {name:'PBKDF2'}, false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({name:'PBKDF2', hash:'SHA-256', salt:enc.encode(salt), iterations:80000}, key, 128);
     return [...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('');
   }
-  const randSalt = () => Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+  const salt = () => Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
   const toast = m => alert(m);
-
-  function validPin(pin){
-    if(!/^\d{5}$/.test(pin)) return false;
-    const bad = ['00000','11111','22222','33333','44444','55555','66666','77777','88888','99999','12345','54321'];
-    return !bad.includes(pin);
+  function validCode(c){
+    if(!/^\d{5}$/.test(c)) return false;
+    const bad = ['00000','11111','22222','33333','44444','55555','66666','77777','88888','99999','12345','54321','12121','11223'];
+    if(bad.includes(c)) return false;
+    // reject 5 in a row ascending/descending
+    const asc = '0123456789', desc='9876543210';
+    if(asc.includes(c) || desc.includes(c)) return false;
+    return true;
   }
 
-  /* UI refs */
+  // ==== UI refs ====
   const nameSelect = document.getElementById('nameSelect');
-  const pinEl      = document.getElementById('pin');
-  const modeEl     = document.getElementById('mode');
+  const codeInput  = document.getElementById('codeInput');
+  const codeLabel  = document.getElementById('codeLabel');
+  const codeHelp   = document.getElementById('codeHelp');
   const goBtn      = document.getElementById('go');
   const loginStatus= document.getElementById('loginStatus');
 
   onAuthStateChanged(auth, (u)=> {
     loginStatus.textContent = u ? `Sessie actief — uid ${u.uid.slice(0,6)}…` : 'Niet ingelogd';
+  });
+
+  nameSelect.addEventListener('change', async ()=>{
+    const name = nameSelect.value;
+    if(!name) return;
+    const pRef = doc(db,'events',EVENT_ID,'participants',name);
+    const snap = await getDoc(pRef);
+    if (snap.exists()) {
+      codeLabel.textContent = 'Voer je 5-cijferige code in';
+      codeHelp.textContent  = 'Deze naam bestaat al. Vul je bestaande code in.';
+    } else {
+      codeLabel.textContent = 'Kies een nieuwe 5-cijferige code';
+      codeHelp.textContent  = 'Gebruik geen voorspelbare code (12345, 00000, 11111, 54321…).';
+    }
   });
 
   async function ensureAnon(){
@@ -141,47 +145,43 @@
     return cred.user;
   }
 
-  async function registerOrLogin(){
+  async function go(){
     try{
       const name = nameSelect.value;
-      const pin  = pinEl.value.trim();
+      const code = codeInput.value.trim();
       if(!name) return toast('Kies je naam.');
-      if(!pin)  return toast('Voer je 5-cijfercode in.');
-      if(!validPin(pin)) return toast('Gebruik een 5-cijfercode die niet voorspelbaar is (geen 00000, 12345, etc.).');
-      if(!PARTICIPANTS.includes(name)) return toast('Onbekende naam.');
-
+      if(!/^\d{5}$/.test(code)) return toast('Voer 5 cijfers in.');
       await ensureAnon();
+
       const pRef = doc(db,'events',EVENT_ID,'participants',name);
       const snap = await getDoc(pRef);
 
-      if(modeEl.value === 'register'){
-        if(snap.exists()) return toast('Naam bestaat al. Kies Inloggen.');
-        const salt=randSalt(); const hash=await hashPass(pin, salt);
+      if (!snap.exists()) {
+        if(!validCode(code)) return toast('Kies een minder voorspelbare code (geen 00000/12345/11111/54321/12121).');
+        const s = salt();
+        const h = await hash5(code, s);
         await setDoc(pRef, {
-          name, pass_salt:salt, pass_hash:hash,
+          name, pass_salt:s, pass_hash:h,
           owner_uid: auth.currentUser.uid,
           allowed_uids: [auth.currentUser.uid],
           createdAt: serverTimestamp(),
           hasLoggedIn: true, lastLoginAt: serverTimestamp()
         });
-      }else{
-        if(!snap.exists()) return toast('Naam nog niet geregistreerd. Kies Nieuw aanmaken.');
-        const data=snap.data(); const hash=await hashPass(pin, data.pass_salt);
-        if(hash !== data.pass_hash) return toast('Onjuiste code.');
+      } else {
+        const data = snap.data();
+        const h = await hash5(code, data.pass_salt);
+        if (h !== data.pass_hash) return toast('Code klopt niet.');
+        // login stempel + dit apparaat toestaan
         await setDoc(pRef, { hasLoggedIn:true, lastLoginAt: serverTimestamp() }, { merge:true });
         await updateDoc(pRef, { allowed_uids: arrayUnion(auth.currentUser.uid) });
       }
 
-      // Bewaar gekozen naam lokaal voor app.html
       localStorage.setItem('sinty_currentName', name);
-      toast('Ingelogd! Klik nu op “Ga naar app”.');
-    }catch(e){
-      console.error(e);
-      toast('Login mislukt: ' + (e.message || e));
-    }
+      window.location.href = 'app.html';
+    }catch(e){ console.error(e); toast('Inloggen mislukt: '+(e.message||e)); }
   }
 
-  goBtn.addEventListener('click', registerOrLogin);
+  goBtn.addEventListener('click', go);
 </script>
 </body>
 </html>
