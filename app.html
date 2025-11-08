@@ -6,12 +6,13 @@
 <title>Sinterlootjes — App</title>
 <meta name="color-scheme" content="light">
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
+  * { box-sizing: border-box; margin:0; padding:0; }
   :root{--bg:#fff7ee;--card:#fff;--text:#1f2937;--muted:#64748b;--brand:#ef4444;--border:#e5e7eb}
-  body{margin:0;font-family:ui-rounded,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Emoji",sans-serif;background:var(--bg);color:var(--text)}
+  body{font-family:ui-rounded,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Emoji",sans-serif;background:var(--bg);color:var(--text)}
   .wrap{max-width:1000px;margin:24px auto;padding:16px}
   .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 6px 18px rgba(15,23,42,.06);margin-bottom:14px}
   h1{margin:0 0 8px;font-size:24px} .lead{color:var(--muted);margin:0 0 8px}
+  h2{margin:0 0 10px;font-size:18px}
   label{font-size:13px;font-weight:650;display:block;margin:10px 0 6px}
   input,textarea,button{font:inherit}
   input[type="text"],textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:#fff}
@@ -21,35 +22,31 @@
   .btn{background:var(--brand);color:#fff} .btn-alt{background:#fff;border:1px solid var(--border)}
   .muted{color:var(--muted)} .hidden{display:none}
   .pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #fde68a;color:#92400e;border-radius:999px;padding:6px 10px;font-size:12.5px;background:#fff}
-  .badge{display:inline-flex;align-items:center;gap:6px;border:1px solid #ffe4e6;color:#9f1239;border-radius:999px;padding:6px 10px;font-size:12.5px;background:#fff}
   .inline-result{display:inline-block;margin-top:10px;border:1px dashed #e5e7eb;border-radius:10px;padding:10px;background:linear-gradient(135deg,#fff,#fff9f1)}
   .item{display:flex;gap:10px;align-items:center;justify-content:space-between;border:1px dashed #e5e7eb;border-radius:10px;padding:10px;margin:6px 0;background:linear-gradient(135deg,#fff,#fff9f1)}
   .col{display:flex;flex-direction:column;gap:6px}
   a.inline{color:#0b3b84;text-decoration:none}
-  .footnote{margin-top:8px;font-size:12px;color:#9aa3b2}
-  .progress{font-size:12.5px;color:#92400e;border:1px solid #fde68a;background:#fff;border-radius:999px;padding:6px 10px;display:inline-block}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="card">
     <h1>🎅 Sinterlootjes</h1>
-    <p class="lead">Je bent ingelogd. Bekijk jouw lootje (na 1× inloggen door iedereen) en vul verlanglijstjes in.</p>
+    <p class="lead">Budget <strong>€15</strong> · Start <strong>15:00</strong> op <strong>nr. 47</strong> · Hapjes & lekkers zijn geregeld.</p>
     <div class="controls">
       <span class="pill" id="loginStatus">Controleren…</span>
       <button class="btn-alt" id="logout">Uitloggen</button>
     </div>
-    <div class="footnote" id="fixedInfoTop"></div>
   </div>
 
   <div class="card">
     <h2>Mijn lootje</h2>
-    <p class="muted">Zichtbaar als <strong>iedereen</strong> minstens 1× heeft ingelogd.</p>
+    <p class="muted">Je lootje wordt zichtbaar nadat iedereen minstens 1× heeft ingelogd.</p>
     <div class="controls">
       <button class="btn-alt" id="reveal" disabled>Toon mijn lootje</button>
       <span id="myMatch" class="inline-result hidden"></span>
     </div>
-    <div id="allStatus" class="progress hidden"></div>
+    <div id="allStatus" class="muted"></div>
   </div>
 
   <div class="card">
@@ -63,15 +60,21 @@
     <div class="controls">
       <button class="btn" id="addItem">Toevoegen</button>
     </div>
+    <div class="muted">Na toevoegen/verwijderen kan het heel even duren voordat je het ziet.</div>
     <div id="myItems" class="col"></div>
   </div>
 
   <div class="card">
     <h2>Alle verlanglijstjes</h2>
-    <div id="allLists" class="col"></div>
+    <div class="muted">Als iemand “Ik koop dit” klikt, verdwijnt het item voor anderen (de eigenaar ziet niet wat gekocht is).</div>
+    <div id="allLists" class="col" style="margin-top:8px;"></div>
   </div>
 
-  <div class="footnote" id="fixedInfoBottom"></div>
+  <div class="card">
+    <h2>Kids — Otis & Levi</h2>
+    <div class="muted">Iedereen kan hier items toevoegen en “Ik koop dit” gebruiken (geen lootje).</div>
+    <div id="kidsLists" class="col" style="margin-top:8px;"></div>
+  </div>
 </div>
 
 <script type="module">
@@ -79,6 +82,7 @@
   const EVENT_ID = 'sinty-2025';
   const TREKCODE = 'hausverlorenenbewilderd';
   const PARTICIPANTS = ['Dieta','Robert','Saskia S','Saskia H','Mark','Joshua','Jerome','Denise','Zoë'];
+  const KIDS = ['Otis','Levi'];
 
   /* Firebase */
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
@@ -103,15 +107,10 @@
   const db   = getFirestore(app);
 
   /* Helpers */
+  const toast = (m)=>alert(m);
   const $enc = new TextEncoder();
   function xmur3(str){ let h=1779033703 ^ str.length; for(let i=0;i<str.length;i++){ h=Math.imul(h ^ str.charCodeAt(i),3432918353); h=(h<<13)|(h>>>19);} return function(){ h=Math.imul(h ^ (h>>>16),2246822507); h=Math.imul(h ^ (h>>>13),3266489909); return (h^=h>>>16)>>>0;};}
-  function sfc32(a,b,c,d){
-    return function(){
-      a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0;
-      let t=(a+b)|0; a=b^(b>>>9); b=(c+(c<<3))|0; c=(c<<21)|(c>>>11); c=(c+t)|0; d=(d+1)|0; t=(t+d)|0;
-      return (t>>>0)/4294967296;
-    };
-  }
+  function sfc32(a,b,c,d){ return function(){ a>>>==0;b>>>==0;c>>>==0;d>>>==0; let t=(a+b)|0; a=b^(b>>>9); b=(c+(c<<3))|0; c=(c<<21)|(c>>>11); c=(c+t)|0; d=(d+1)|0; t=(t+d)|0; return (t>>>0)/4294967296;};}
   function rng(seed){ const g=xmur3(seed); return sfc32(g(),g(),g(),g()); }
   function shuffle(a, r){ const x=a.slice(); for(let i=x.length-1;i>0;i--){ const j=Math.floor(r()*(i+1)); [x[i],x[j]]=[x[j],x[i]];} return x; }
   function assignDeterministic(names, seed){
@@ -122,7 +121,6 @@
       for(const rv of opts){ used.add(rv); asg.set(g,rv); if(bt(i+1)) return true; used.delete(rv); asg.delete(g); } return false; }
     return bt(0)?asg:null;
   }
-  const toast = m => alert(m);
 
   /* UI refs */
   const loginStatus = document.getElementById('loginStatus');
@@ -130,15 +128,11 @@
   const revealBtn   = document.getElementById('reveal');
   const myMatchEl   = document.getElementById('myMatch');
   const allStatus   = document.getElementById('allStatus');
-  const fixedInfoTop= document.getElementById('fixedInfoTop');
-  const fixedInfoBottom= document.getElementById('fixedInfoBottom');
   const myItemsEl   = document.getElementById('myItems');
   const allListsEl  = document.getElementById('allLists');
+  const kidsListsEl = document.getElementById('kidsLists');
 
-  fixedInfoTop.textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
-  fixedInfoBottom.textContent = `Event-ID: ${EVENT_ID} · Trekcode: ${TREKCODE}`;
-
-  // gekozen naam van loginpagina
+  // Haal gekozen naam uit login
   let currentName = localStorage.getItem('sinty_currentName') || null;
 
   // Auth guard
@@ -153,7 +147,7 @@
     window.location.href = 'index.html';
   });
 
-  /* iedereen 1× ingelogd */
+  /* Iedereen 1× ingelogd */
   async function computeAllLoggedOnce(){
     const qs=await getDocs(collection(db,'events',EVENT_ID,'participants'));
     const map=new Map(); PARTICIPANTS.forEach(n=>map.set(n,false));
@@ -163,15 +157,15 @@
   }
   async function updateAllBadge(){
     const {done,total,all}=await computeAllLoggedOnce();
-    if(all){ allStatus.classList.add('hidden'); revealBtn.disabled = !currentName; }
-    else{ allStatus.textContent = `Wachten op familie: ${done}/${total} heeft 1× ingelogd`; allStatus.classList.remove('hidden'); revealBtn.disabled = true; }
+    allStatus.textContent = all ? 'Iedereen is ingelogd ✅' : `Wachten op familie: ${done}/${total} heeft 1× ingelogd`;
+    revealBtn.disabled = !all || !currentName;
   }
   onSnapshot(collection(db,'events',EVENT_ID,'participants'), updateAllBadge);
   updateAllBadge();
 
-  /* lootje tonen */
-  revealBtn.addEventListener('click', async ()=>{
-    if(!currentName) return toast('Je naam ontbreekt — log opnieuw in a.u.b.');
+  /* Lootje tonen */
+  document.getElementById('reveal').addEventListener('click', async ()=>{
+    if(!currentName) return toast('Je naam ontbreekt — ga terug naar de login.');
     const {all}=await computeAllLoggedOnce();
     if(!all) return toast('Nog niet iedereen heeft 1× ingelogd.');
 
@@ -183,8 +177,8 @@
     myMatchEl.classList.remove('hidden');
   });
 
-  /* verlanglijstjes */
-  function itemRow(owner,id,data,purchased){
+  /* Verlanglijstjes — helpers */
+  function itemRow(owner,id,data,purchased,opts){
     const div=document.createElement('div'); div.className='item';
     const left=document.createElement('div'); left.className='col';
     if(data.url){ const a=document.createElement('a'); a.href=data.url; a.target='_blank'; a.textContent=data.title||'(zonder titel)'; a.className='inline'; left.appendChild(a); }
@@ -192,26 +186,36 @@
     if(data.note){ const s=document.createElement('div'); s.className='muted'; s.textContent=data.note; left.appendChild(s); }
     const right=document.createElement('div'); right.style.display='flex'; right.style.gap='8px';
 
-    if(owner===currentName){
+    // verwijderen (alleen eigenaar bij deelnemers; bij kids iedereen)
+    if(opts.canDelete){
       const del=document.createElement('button'); del.className='btn-alt'; del.textContent='Verwijderen';
-      del.onclick=async()=>{ await deleteDoc(doc(db,'events',EVENT_ID,'wishlists',owner,'items',id)); };
+      del.onclick=async()=>{ try{ await deleteDoc(doc(db, ...opts.delPath(owner,id))); toast('Verwijderd — kan heel even duren.'); }catch(e){ toast('Kon niet verwijderen.'); } };
       right.appendChild(del);
-    }else{
-      const btn=document.createElement('button'); btn.className='btn'; btn.textContent = purchased ? 'Gekocht (ongedaan maken)' : 'Ik koop dit';
+    }
+
+    // koopknop (nooit tonen aan lijst-eigenaar bij deelnemers; bij kids altijd tonen)
+    if(opts.canTogglePurchase){
+      const btn=document.createElement('button'); btn.className='btn';
+      btn.textContent = purchased ? 'Gekocht (ongedaan)' : 'Ik koop dit';
       btn.onclick=async()=>{
-        const pRef=doc(db,'events',EVENT_ID,'wishlists',owner,'purchases',id);
-        if(purchased) await deleteDoc(pRef);
-        else await setDoc(pRef,{ buyerUid: (auth.currentUser||{}).uid, buyerName: currentName||'—', at: serverTimestamp() });
+        try{
+          const pRef=doc(db, ...opts.purchasePath(owner,id));
+          if(purchased) await deleteDoc(pRef);
+          else await setDoc(pRef,{ at: serverTimestamp() });
+          toast('Verwerkt — kan heel even duren.');
+        }catch(e){ toast('Kon niet verwerken.'); }
       };
       right.appendChild(btn);
     }
+
     div.appendChild(left); div.appendChild(right);
     return div;
   }
 
+  /* Mijn lijst */
   document.getElementById('addItem').addEventListener('click', async ()=>{
     try{
-      if(!currentName) return toast('Je naam ontbreekt — log opnieuw in a.u.b.');
+      if(!currentName) return toast('Je naam ontbreekt — ga terug naar de login.');
       const title=document.getElementById('itemTitle').value.trim();
       const url=document.getElementById('itemUrl').value.trim();
       const note=document.getElementById('itemNote').value.trim();
@@ -224,22 +228,30 @@
       document.getElementById('itemTitle').value='';
       document.getElementById('itemUrl').value='';
       document.getElementById('itemNote').value='';
-    }catch(e){
-      console.error(e);
-      toast('Kon item niet toevoegen: ' + (e.message || e));
-    }
+      toast('Toegevoegd — kan heel even duren.');
+    }catch(e){ toast('Kon item niet toevoegen.'); }
   });
 
   function startMyListListener(){
-    if(!currentName) { myItemsEl.innerHTML=''; return; }
+    if(!currentName){ myItemsEl.innerHTML=''; return; }
     const qItems=query(collection(db,'events',EVENT_ID,'wishlists',currentName,'items'), orderBy('createdAt','asc'));
     onSnapshot(qItems,(snap)=>{
       myItemsEl.innerHTML='';
-      snap.forEach(d=>{ myItemsEl.appendChild(itemRow(currentName,d.id,d.data(),false)); });
+      snap.forEach(d=>{
+        myItemsEl.appendChild(
+          itemRow(currentName,d.id,d.data(),false,{
+            canDelete:true,
+            canTogglePurchase:false, // eigenaar ziet purchase niet
+            delPath:(owner,id)=>['events',EVENT_ID,'wishlists',owner,'items',id],
+            purchasePath:()=>null
+          })
+        );
+      });
       if(!snap.size){ myItemsEl.innerHTML='<div class="muted">Nog geen items.</div>'; }
     });
   }
 
+  /* Alle deelnemers-lijsten */
   async function refreshAllLists(){
     allListsEl.innerHTML='';
     const owners = PARTICIPANTS.slice().sort((a,b)=>a.localeCompare(b,'nl',{sensitivity:'base'}));
@@ -256,23 +268,84 @@
       try{
         const pSnap=await getDocs(collection(db,'events',EVENT_ID,'wishlists',owner,'purchases'));
         pSnap.forEach(d=>purchasedIds.add(d.id));
-      }catch(_){ purchasedIds=new Set(); } // eigenaar: geen leesrechten
+      }catch(e){ purchasedIds=new Set(); }
 
       iSnap.forEach(d=>{
         const isPurchased=purchasedIds.has(d.id);
-        if(owner !== currentName && isPurchased) return;
-        list.appendChild(itemRow(owner,d.id,d.data(),isPurchased));
+        if(owner !== currentName && isPurchased) return; // verberg voor anderen
+        list.appendChild(itemRow(owner,d.id,d.data(),isPurchased,{
+          canDelete: owner===currentName,
+          canTogglePurchase: owner!==currentName, // anderen kunnen kopen
+          delPath:(o,id)=>['events',EVENT_ID,'wishlists',o,'items',id],
+          purchasePath:(o,id)=>['events',EVENT_ID,'wishlists',o,'purchases',id]
+        }));
       });
 
-      if(!list.childElementCount){ const em=document.createElement('div'); em.className='muted'; em.textContent='Geen zichtbare items.'; list.appendChild(em); }
+      if(!list.childElementCount){
+        const em=document.createElement('div'); em.className='muted'; em.textContent='Geen zichtbare items.'; list.appendChild(em);
+      }
+    }
+  }
+
+  /* Kids-lijsten (iedereen mag toevoegen en kopen) */
+  async function refreshKids(){
+    kidsListsEl.innerHTML='';
+    for(const kid of KIDS){
+      const wrap=document.createElement('div'); wrap.className='card';
+      const h=document.createElement('h3'); h.textContent=kid; wrap.appendChild(h);
+
+      // invoer voor dit kind
+      const box=document.createElement('div'); box.className='col';
+      const it=document.createElement('input'); it.type='text'; it.placeholder='Item voor '+kid;
+      const iu=document.createElement('input'); iu.type='text'; iu.placeholder='Link (optioneel)';
+      const inote=document.createElement('textarea'); inote.placeholder='Notitie (opt.)';
+      const add=document.createElement('button'); add.className='btn'; add.textContent='Toevoegen';
+      add.onclick = async ()=>{
+        if(!it.value.trim()) return toast('Geef een titel.');
+        await addDoc(collection(db,'events',EVENT_ID,'kids',kid,'items'), {
+          title: it.value.trim(), url: iu.value.trim()||null, note: inote.value.trim()||null, createdAt: serverTimestamp()
+        });
+        it.value=''; iu.value=''; inote.value='';
+        toast('Toegevoegd — kan heel even duren.');
+      };
+      box.appendChild(it); box.appendChild(iu); box.appendChild(inote); box.appendChild(add);
+      wrap.appendChild(box);
+
+      const list=document.createElement('div'); list.className='col'; wrap.appendChild(list);
+      kidsListsEl.appendChild(wrap);
+
+      const qItems=query(collection(db,'events',EVENT_ID,'kids',kid,'items'), orderBy('createdAt','asc'));
+      const iSnap=await getDocs(qItems);
+
+      let purchasedIds=new Set();
+      try{
+        const pSnap=await getDocs(collection(db,'events',EVENT_ID,'kids',kid,'purchases'));
+        pSnap.forEach(d=>purchasedIds.add(d.id));
+      }catch(e){ purchasedIds=new Set(); }
+
+      iSnap.forEach(d=>{
+        const isPurchased=purchasedIds.has(d.id);
+        if(isPurchased) return; // verberg gekocht item voor iedereen
+        list.appendChild(itemRow(kid,d.id,d.data(),isPurchased,{
+          canDelete: true, // iedereen mag opruimen
+          canTogglePurchase: true,
+          delPath:(o,id)=>['events',EVENT_ID,'kids',o,'items',id],
+          purchasePath:(o,id)=>['events',EVENT_ID,'kids',o,'purchases',id]
+        }));
+      });
+
+      if(!list.childElementCount){
+        const em=document.createElement('div'); em.className='muted'; em.textContent='Nog geen items.'; list.appendChild(em);
+      }
     }
   }
 
   onSnapshot(collection(db,'events',EVENT_ID,'participants'), ()=>{ updateAllBadge(); startMyListListener(); refreshAllLists(); });
   onSnapshot(collection(db,'events',EVENT_ID,'wishlists'), ()=> refreshAllLists());
+  onSnapshot(collection(db,'events',EVENT_ID,'kids'), ()=> refreshKids());
 
-  // init
-  startMyListListener(); refreshAllLists();
+  // eerste render
+  startMyListListener(); refreshAllLists(); refreshKids();
 </script>
 </body>
 </html>
